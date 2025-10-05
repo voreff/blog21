@@ -105,12 +105,12 @@ export default function ChatPage() {
 
     if (token && user) {
       try {
-        // Check if token is still valid
+        // Check if token is still valid with longer timeout
         const testResponse = await apiCall(apiEndpoints.heartbeat, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           credentials: 'include'
-        })
+        }, 10000) // 10 seconds timeout
 
         if (testResponse.success) {
           // Token is valid, set user and extend session
@@ -124,13 +124,21 @@ export default function ChatPage() {
           alert("Avval login qiling!")
           router.push("/")
         }
-      } catch (error) {
-        // Network error or static mode, clear storage and redirect
-        localStorage.removeItem("blog_token")
-        localStorage.removeItem("blog_user")
-        localStorage.removeItem("blog_login_time")
-        alert("Avval login qiling!")
-        router.push("/")
+      } catch (error: unknown) {
+        // Handle different types of errors differently
+        if (error instanceof Error && error.message === "Request timeout") {
+          // Server is slow but user might still be logged in
+          console.log("Server timeout, using cached session")
+          setCurrentUser(JSON.parse(user))
+          localStorage.setItem("blog_login_time", Date.now().toString())
+        } else {
+          // Network error or other issues, clear storage and redirect
+          localStorage.removeItem("blog_token")
+          localStorage.removeItem("blog_user")
+          localStorage.removeItem("blog_login_time")
+          alert("Avval login qiling!")
+          router.push("/")
+        }
       }
     } else {
       // No token or user, show login message and redirect

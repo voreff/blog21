@@ -26,13 +26,18 @@ export const apiEndpoints = {
   contact: `${API_BASE_URL}/api.php?action=contact`,
 }
 
-export const apiCall = async (url: string, options?: RequestInit) => {
+export const apiCall = async (url: string, options?: RequestInit, timeout: number = 10000) => {
   try {
     console.log("API Call:", { url, method: options?.method || 'GET' })
+
+    // Create AbortController for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
 
     const response = await fetch(url, {
       ...options,
       credentials: 'include', // Enable cookies/session for CORS
+      signal: controller.signal, // Add abort signal for timeout
 
       headers: {
         "Content-Type": "application/json",
@@ -40,6 +45,7 @@ export const apiCall = async (url: string, options?: RequestInit) => {
       },
     })
 
+    clearTimeout(timeoutId)
     console.log("API Response status:", response.status)
 
     if (!response.ok) {
@@ -52,6 +58,10 @@ export const apiCall = async (url: string, options?: RequestInit) => {
     console.log("API Response data:", data)
     return data
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error("API call timed out:", error)
+      throw new Error("Request timeout")
+    }
     console.error("API call failed:", error)
     throw error
   }
