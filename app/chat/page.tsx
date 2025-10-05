@@ -101,47 +101,50 @@ export default function ChatPage() {
   const checkUserSession = async () => {
     const token = localStorage.getItem("blog_token")
     const user = localStorage.getItem("blog_user")
-    const loginTime = localStorage.getItem("blog_login_time")
+
+    console.log("🔍 Checking user session:", {
+      hasToken: !!token,
+      hasUser: !!user,
+      token: token ? `${token.substring(0, 20)}...` : 'none'
+    })
 
     if (token && user) {
       try {
-        // Check if token is still valid with longer timeout
-        const testResponse = await apiCall(apiEndpoints.heartbeat, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include'
-        }, 10000) // 10 seconds timeout
+        // 🚀 IMMEDIATELY use cached data (no waiting!)
+        const userData = JSON.parse(user)
+        console.log("✅ Using cached user data:", userData.username)
+        setCurrentUser(userData)
+        localStorage.setItem("blog_login_time", Date.now().toString())
 
-        if (testResponse.success) {
-          // Token is valid, set user and extend session
-          setCurrentUser(JSON.parse(user))
-          localStorage.setItem("blog_login_time", Date.now().toString())
-        } else {
-          // Token expired, clear storage and show login message
-          localStorage.removeItem("blog_token")
-          localStorage.removeItem("blog_user")
-          localStorage.removeItem("blog_login_time")
-          alert("Avval login qiling!")
-          router.push("/")
-        }
-      } catch (error: unknown) {
-        // Handle different types of errors differently
-        if (error instanceof Error && error.message === "Request timeout") {
-          // Server is slow but user might still be logged in
-          console.log("Server timeout, using cached session")
-          setCurrentUser(JSON.parse(user))
-          localStorage.setItem("blog_login_time", Date.now().toString())
-        } else {
-          // Network error or other issues, clear storage and redirect
-          localStorage.removeItem("blog_token")
-          localStorage.removeItem("blog_user")
-          localStorage.removeItem("blog_login_time")
-          alert("Avval login qiling!")
-          router.push("/")
-        }
+        // Background token verification (non-blocking)
+        setTimeout(async () => {
+          try {
+            const response = await apiCall(apiEndpoints.heartbeat, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` },
+              credentials: 'include'
+            }, 3000)
+
+            if (response.success) {
+              console.log("✅ Token verified successfully")
+            } else {
+              console.log("❌ Token verification failed, but continuing with cached session")
+            }
+          } catch (error) {
+            console.log("⚠️ Token verification error (continuing with cached):", error instanceof Error ? error.message : 'Unknown error')
+          }
+        }, 100) // Small delay to not block initial render
+
+      } catch (error) {
+        console.error("❌ Error parsing cached user data:", error)
+        localStorage.removeItem("blog_token")
+        localStorage.removeItem("blog_user")
+        localStorage.removeItem("blog_login_time")
+        alert("Login ma'lumotlari noto'g'ri. Qaytadan login qiling!")
+        router.push("/")
       }
     } else {
-      // No token or user, show login message and redirect
+      console.log("❌ No token or user found")
       alert("Avval login qiling!")
       router.push("/")
     }
